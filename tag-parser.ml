@@ -529,6 +529,12 @@ let reserved_word_list =
    "quasiquote"; "quote"; "set!"; "pset!"; "unquote";
    "unquote-splicing"];;
 
+let nt_disj_nt_list l= 
+ List.fold_right
+  (fun x acc -> disj (x) (acc))
+  l
+  nt_none;;
+
 let frac_to_const e = match e with
     | Number(Fraction(nomi, domi)) -> Const(Sexpr(e))
     | _ -> raise X_no_match;;
@@ -556,7 +562,10 @@ let rec tag_parse e = match e with
                                   | Nil -> Const(Void)
                                   | _ -> tag_parse rest in
                                   If(tag_parse(test), tag_parse(dit), dut)
-      | _ -> raise X_no_match
+      | _ -> raise X_no_match;;
+
+let tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps
+
 
 (* and var_to_expr e = caten (fun x -> ) *)
 
