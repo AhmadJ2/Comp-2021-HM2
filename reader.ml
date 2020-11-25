@@ -245,8 +245,8 @@ and nt_all_quotes s = let (quete,sexp) = match s with
                         |_ -> ("unquote",rest)
                       )
       |_ -> raise X_no_match 
-      in let (s,r) = (star nt_sexpr) sexp in 
-      (Pair(Symbol(quete), pairs s), r)
+      in let (s,r) = nt_sexpr sexp in 
+      (Pair(Symbol(quete), Pair(s, Nil)), r)
 and nt_sexprcomment s = pack (caten (caten (word "#;") (nt_sexpr)) (maybe (nt_sexpr)))
       (fun ((s,e),r)-> match r with | None -> Nil | Some r -> r ) s
 and nt_comment s = let (_ ,s) = caten (char ';') (star (const (fun ch -> ch!='\n'))) s in

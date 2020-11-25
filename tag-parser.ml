@@ -439,8 +439,8 @@ and nt_all_quotes s = let (quete,sexp) = match s with
                         |_ -> ("unquote",rest)
                       )
       |_ -> raise X_no_match 
-      in let (s,r) = (star nt_sexpr) sexp in 
-      (Pair(Symbol(quete), pairs s), r)
+      in let (s,r) = nt_sexpr sexp in 
+      (Pair(Symbol(quete), Pair(s, Nil)), r)
 and nt_sexprcomment s = pack (caten (caten (word "#;") (nt_sexpr)) (maybe (nt_sexpr)))
       (fun ((s,e),r)-> match r with | None -> Nil | Some r -> r ) s
 and nt_comment s = let (_ ,s) = caten (char ';') (star (const (fun ch -> ch!='\n'))) s in
@@ -455,7 +455,7 @@ let read_sexprs string = let (sexp, lst) = star nt_sexpr (string_to_list string)
           match lst with | [] -> sexp | _ -> raise X_no_match ;;
 end;; (* struct Reader *)
 
-(* --------- *)
+(* ---------------------------------  start here ------------------------ *)
 (* #use "reader.ml";; *)
 
 type constant =
@@ -504,6 +504,7 @@ exception X_syntax_error;;
 
 module type TAG_PARSER = sig
   val tag_parse_expressions : sexpr list -> expr list
+  (* todo: use expr_eq before starting to parse the input *)
 end;; (* signature TAG_PARSER *)
 
 module Tag_Parser : TAG_PARSER = struct
@@ -520,4 +521,42 @@ let tag_parse_expressions sexpr = raise X_not_yet_implemented;;
 
   
 end;; (* struct Tag_Parser *)
+
+(* todo: remove after *)
+let reserved_word_list =
+  ["and"; "begin"; "cond"; "define"; "else";
+   "if"; "lambda"; "let"; "let*"; "letrec"; "or";
+   "quasiquote"; "quote"; "set!"; "pset!"; "unquote";
+   "unquote-splicing"];;
+
+let frac_to_const e = match e with
+    | Number(Fraction(nomi, domi)) -> Const(Sexpr(e))
+    | _ -> raise X_no_match;;
+
+let float_to_const e = match e with
+    | Number(Float(num)) -> Const(Sexpr(e))
+    | _ -> raise X_no_match;;
+    
+let number_to_const e = disj frac_to_const float_to_const e;;
+
+let not_resetve_word e = andmap (fun acc -> e = acc) reserved_word_list;;
+
+let var_to_expr var =  if (not_resetve_word  var) then Var(var) else raise X_no_match;;
+
+(* let tag_if_expr test dit dut *)
+
+let rec tag_parse e = match e with
+      | Number(num) -> number_to_const e
+      | Bool(b) -> Const(Sexpr(e))
+      | Char(c) -> Const(Sexpr(e))
+      | String(s) -> Const(Sexpr(e))
+      | Pair(Symbol("quote"), Pair(exp, Nil)) -> Const(Sexpr(exp))
+      | Pair(Symbol("define"), Pair(Symbol(var), Pair(_, Nil))) -> var_to_expr var
+      | Pair(Symbol("if"), Pair(test, Pair(dit, rest))) -> let (dut) = match rest with
+                                  | Nil -> Const(Void)
+                                  | _ -> tag_parse rest in
+                                  If(tag_parse(test), tag_parse(dit), dut)
+      | _ -> raise X_no_match
+
+(* and var_to_expr e = caten (fun x -> ) *)
 
