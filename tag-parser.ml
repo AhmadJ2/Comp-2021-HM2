@@ -547,25 +547,68 @@ let number_to_const e = disj frac_to_const float_to_const e;;
 
 let not_resetve_word e = andmap (fun acc -> e = acc) reserved_word_list;;
 
-let var_to_expr var =  if (not_resetve_word  var) then Var(var) else raise X_no_match;;
+let define_body body =  let(var, vl) = match body with
+      | Pair(Symbol(var), vl) -> (var, vl)
+      | _ -> raise X_no_match in 
+      if not_resetve_word var then Var(var) else raise X_no_match;;
 
-(* let tag_if_expr test dit dut *)
+let quote_body body = match body with  (* forum *)
+      | Pair(exp, Nil) -> Const(Sexpr(exp))
+      | _-> raise X_no_match;;
+      
+let if_body body = match body with
+        | Pair(test, Pair(dit, rest))-> (match rest with
+                  | Pair(dut, Nil) -> (test, dit, dut)
+                  |Nil -> (test, dit, Nil)
+                  |_ -> raise X_no_match)
+        | _ -> raise X_no_match;;
+
+let rec proper_list lst = match lst with  
+          | Pair(_ , Nil)-> true
+          | Pair(_ , cdr) -> proper_list cdr
+          | _ -> false;;
+
+
+let rec simple_lambda_args_helper args lst = match args with         
+        | Pair(Symbol(s), rest) -> simple_lambda_args_helper rest (lst@[s])
+        | Nil -> lst 
+        | _-> raise X_no_match;;
+
+let simple_lambda_args args = simple_lambda_args_helper args [];;
+
+let rec opt_lambda_args_helper args lst = match args with         
+        | Pair(Symbol(s), rest) -> opt_lambda_args_helper rest (lst@[s])
+        | Symbol(after_dot) -> (lst, after_dot)
+        |_-> raise X_no_match;;
+
+let lambda_opt_args args = opt_lambda_args_helper args [];;
 
 let rec tag_parse e = match e with
       | Number(num) -> number_to_const e
       | Bool(b) -> Const(Sexpr(e))
       | Char(c) -> Const(Sexpr(e))
       | String(s) -> Const(Sexpr(e))
-      | Pair(Symbol("quote"), Pair(exp, Nil)) -> Const(Sexpr(exp))
-      | Pair(Symbol("define"), Pair(Symbol(var), Pair(_, Nil))) -> var_to_expr var
-      | Pair(Symbol("if"), Pair(test, Pair(dit, rest))) -> let (dut) = match rest with
-                                  | Nil -> Const(Void)
-                                  | _ -> tag_parse rest in
-                                  If(tag_parse(test), tag_parse(dit), dut)
-      | _ -> raise X_no_match;;
+      | Pair(Symbol("quote"), body) -> quote_body body (* forum *)
+      | Pair(Symbol("define"), body) -> define_body body
+      | Pair(Symbol("if"), body) -> let (test, dit, dut) = if_body body in
+                                            (match dut with
+                                            | Nil -> If(tag_parse(test), tag_parse(dit), Const(Void))
+                                            | _-> If(tag_parse(test), tag_parse(dit), tag_parse(dut))
+                                            )
 
-let tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps
+                                  
+      | Pair(Symbol("lambda"), Pair(args, rest)) -> 
+        let body = match rest with | Pair(b, Nil) -> b | _ -> raise X_no_match in
+            if (proper_list args) 
+                    then
+                    (let (args) = simple_lambda_args args in LambdaSimple(args, tag_parse(body))) 
+                    else 
+                    (let (args, last) = lambda_opt_args args in LambdaOpt(args, last, tag_parse(body)))
+      | Pair(car, cdr) -> Seq(tag_parse(car)::[tag_parse(cdr)]) (* todo: ask in forum *)
+      | Symbol(s) -> Var(s)
+      | Nil -> Const(Void) (* TEMP*)
 
+let tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps;;
 
-(* and var_to_expr e = caten (fun x -> ) *)
+(* application chapter 3 slide 32 *)
 
