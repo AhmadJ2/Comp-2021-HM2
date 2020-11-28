@@ -581,6 +581,13 @@ let rec opt_lambda_args_helper args lst = match args with
         | Symbol(after_dot) -> (lst, after_dot)
         |_-> raise X_no_match;;
 
+let rec inside_pair_helper args lst = match args with         
+      | Pair(s, rest) -> inside_pair_helper rest lst@[s]
+      | Nil -> lst
+      | _ -> lst@[args];;
+
+let inside_pair args = inside_pair_helper args [];;
+
 let lambda_opt_args args = opt_lambda_args_helper args [];;
 
 let rec tag_parse e = match e with
@@ -604,11 +611,12 @@ let rec tag_parse e = match e with
                     (let (args) = simple_lambda_args args in LambdaSimple(args, tag_parse(body))) 
                     else 
                     (let (args, last) = lambda_opt_args args in LambdaOpt(args, last, tag_parse(body)))
-      | Pair(car, cdr) -> Seq(tag_parse(car)::[tag_parse(cdr)]) (* todo: ask in forum *)
+      | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr)) 
+      (* Applic(tag_parse(car), List.map tag_parse (inside_pair cdr))  *)
       | Symbol(s) -> Var(s)
       | Nil -> Const(Void) (* TEMP*)
 
-let tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps;;
+and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps;;
 
 (* application chapter 3 slide 32 *)
 
