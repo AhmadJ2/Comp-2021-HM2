@@ -590,20 +590,23 @@ let inside_pair args = inside_pair_helper args [];;
 
 let lambda_opt_args args = opt_lambda_args_helper args [];;
 
+let parse_set body = match body with
+          | Pair(var, Pair(value, Nil)) -> (var, value)
+          | _-> raise X_no_match;;
+
 let rec tag_parse e = match e with
       | Number(num) -> number_to_const e
       | Bool(b) -> Const(Sexpr(e))
       | Char(c) -> Const(Sexpr(e))
       | String(s) -> Const(Sexpr(e))
+      | Symbol(s) -> Var(s)
       | Pair(Symbol("quote"), body) -> quote_body body (* forum *)
       | Pair(Symbol("define"), body) -> define_body body
       | Pair(Symbol("if"), body) -> let (test, dit, dut) = if_body body in
                                             (match dut with
                                             | Nil -> If(tag_parse(test), tag_parse(dit), Const(Void))
                                             | _-> If(tag_parse(test), tag_parse(dit), tag_parse(dut))
-                                            )
-
-                                  
+                                            )                       
       | Pair(Symbol("lambda"), Pair(args, rest)) -> 
         let body = match rest with | Pair(b, Nil) -> b | _ -> raise X_no_match in
             if (proper_list args) 
@@ -611,9 +614,15 @@ let rec tag_parse e = match e with
                     (let (args) = simple_lambda_args args in LambdaSimple(args, tag_parse(body))) 
                     else 
                     (let (args, last) = lambda_opt_args args in LambdaOpt(args, last, tag_parse(body)))
+      | Pair(Symbol("and"), rest) -> (match rest with (* forum *)
+                |Nil -> Const(Sexpr(Bool(true)))
+                | Pair(exp, Nil)-> tag_parse exp
+                | Pair(exp, rest) -> If(tag_parse exp, tag_parse (Pair(Symbol("and"), rest)), Const(Sexpr(Bool(false))))
+                |_-> raise X_no_match
+                )
+      | Pair(Symbol("or"), rest) -> Or(List.map tag_parse (inside_pair rest))
+      | Pair(Symbol("set!"), rest) -> let (var, value) = parse_set rest in Set(tag_parse var, tag_parse value) (* macro expand pset!*)
       | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr)) 
-      (* Applic(tag_parse(car), List.map tag_parse (inside_pair cdr))  *)
-      | Symbol(s) -> Var(s)
       | Nil -> Const(Void) (* TEMP*)
 
 and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps;;
