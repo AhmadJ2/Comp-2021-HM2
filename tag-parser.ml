@@ -637,8 +637,3 @@ and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps
 
 (* application chapter 3 slide 32 *)
 
-
-  Pair (Pair (Symbol "x", Pair (Symbol "t", Nil)),
-   Pair (Number (Fraction (1, 1)),
-    Pair (Number (Fraction (2, 1)), Pair (Number (Fraction (3, 1)), Nil)))
-    )
