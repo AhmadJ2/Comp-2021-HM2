@@ -40,7 +40,7 @@ module PC = struct
 exception X_not_yet_implemented;;
 
 exception X_no_match;;
-exception M_no_match;;
+
 
 let const pred =
   function 
@@ -502,6 +502,10 @@ let rec expr_eq e1 e2 =
 	
                        
 exception X_syntax_error;;
+exception X_Reserve_Word;;
+exception X_empty_lambda_body;;
+exception X_not_supported_forum;;
+exception M_no_match;;
 
 module type TAG_PARSER = sig
   val tag_parse_expressions : sexpr list -> expr list
@@ -546,12 +550,9 @@ let float_to_const e = match e with
     
 let number_to_const e = disj frac_to_const float_to_const e;;
 
-let not_resetve_word e = andmap (fun acc -> e = acc) reserved_word_list;;
+let reserve_word e = ormap (fun acc -> e = acc) reserved_word_list;;
 
-let define_body body =  let(var, vl) = match body with
-      | Pair(Symbol(var), vl) -> (var, vl)
-      | _ -> raise X_no_match in 
-      if not_resetve_word var then Var(var) else raise X_no_match;;
+let check_var s = if (reserve_word s) then raise X_Reserve_Word else Var(s);;
 
 let quote_body body = match body with  (* forum *)
       | Pair(exp, Nil) -> Const(Sexpr(exp))
@@ -560,12 +561,12 @@ let quote_body body = match body with  (* forum *)
 let if_body body = match body with
         | Pair(test, Pair(dit, rest))-> (match rest with
                   | Pair(dut, Nil) -> (test, dit, dut)
-                  |Nil -> (test, dit, Nil)
+                  | Nil -> (test, dit, Nil)
                   |_ -> raise X_no_match)
         | _ -> raise X_no_match;;
 
 let rec proper_list lst = match lst with  
-          | Pair(_ , Nil)-> true
+          | Nil-> true
           | Pair(_ , cdr) -> proper_list cdr
           | _ -> false;;
 
@@ -600,14 +601,15 @@ let rec tag_parse e = match e with
       | Bool(b) -> Const(Sexpr(e))
       | Char(c) -> Const(Sexpr(e))
       | String(s) -> Const(Sexpr(e))
-      | Symbol(s) -> Var(s)
+      | Symbol(s) -> check_var s
       | Pair(Symbol("quote"), body) -> quote_body body (* forum *)
-      | Pair(Symbol("define"), body) -> define_body body
+      | Pair(Symbol("define"), body) -> parse_define body
       | Pair(Symbol("if"), body) -> parse_if body                 
       | Pair(Symbol("lambda"), Pair(args, exps)) -> parse_lambda args exps
       | Pair(Symbol("and"), rest) -> parse_and rest
       | Pair(Symbol("or"), rest) -> Or(List.map tag_parse (inside_pair rest))
       | Pair(Symbol("set!"), rest) -> let (var, value) = parse_set rest in Set(tag_parse var, tag_parse value) (* macro expand pset!*)
+      | Pair(Symbol("begin"), rest) -> parse_begin_sequence rest
       | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr)) 
       | Nil -> Const(Void) (* TEMP *)
 
@@ -618,10 +620,10 @@ and parse_if body = let (test, dit, dut) = if_body body in
               | _-> If(tag_parse(test), tag_parse(dit), tag_parse(dut))
               )
               
-and parse_lambda args exps = let body = match exps with | Pair(b, q) -> exps | _ -> raise X_no_match in (* body not empty, check -> improper body list *)
+and parse_lambda args exps = let body = match exps with | Pair(b, q) -> exps | _ -> raise X_empty_lambda_body in (* body not empty, check -> improper body list *)
                         let seq = Seq(List.map tag_parse (inside_pair body)) in
                             if (proper_list args) 
-                                    then (* ask in forum about the body, Seq??? *)
+                                    then 
                                     (let (args) = simple_lambda_args args in LambdaSimple(args, seq)) 
                                     else 
                                     (let (args, last) = lambda_opt_args args in LambdaOpt(args, last, seq))
@@ -631,7 +633,26 @@ and parse_and rest = match rest with (* forum *)
                 | Pair(exp, Nil)-> tag_parse exp
                 | Pair(exp, rest) -> If(tag_parse exp, tag_parse (Pair(Symbol("and"), rest)), Const(Sexpr(Bool(false))))
                 |_-> raise X_no_match 
-                                  
+       
+and parse_define body =  match body with
+                | Pair(var, vl) -> let value = (match vl with 
+                                        | Pair(vl, Nil) -> vl
+                                        |_-> raise X_syntax_error)
+                in Def(tag_parse var, tag_parse value)
+                | _ -> raise X_no_match
+
+and parse_begin_sequence body = match body with
+        | Nil -> Const(Void)
+        | Pair(s, Nil) -> tag_parse s
+        | Pair(s, rest) -> Seq(no_base_begin body [])
+        |_ -> raise X_not_supported_forum
+
+and no_base_begin body seq = match body with
+        | Nil -> seq
+        | Pair(Pair(Symbol("begin") ,rest), rest2) -> no_base_begin rest2 (no_base_begin rest seq) (* faltten it*)
+        | Pair(exp ,rest) -> no_base_begin rest (seq@[tag_parse exp])
+        | _ -> seq@[tag_parse body]
+
 and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
 ;;
 
