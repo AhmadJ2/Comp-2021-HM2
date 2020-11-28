@@ -40,6 +40,7 @@ module PC = struct
 exception X_not_yet_implemented;;
 
 exception X_no_match;;
+exception M_no_match;;
 
 let const pred =
   function 
@@ -602,30 +603,42 @@ let rec tag_parse e = match e with
       | Symbol(s) -> Var(s)
       | Pair(Symbol("quote"), body) -> quote_body body (* forum *)
       | Pair(Symbol("define"), body) -> define_body body
-      | Pair(Symbol("if"), body) -> let (test, dit, dut) = if_body body in
-                                            (match dut with
-                                            | Nil -> If(tag_parse(test), tag_parse(dit), Const(Void))
-                                            | _-> If(tag_parse(test), tag_parse(dit), tag_parse(dut))
-                                            )                       
-      | Pair(Symbol("lambda"), Pair(args, rest)) -> 
-        let body = match rest with | Pair(b, Nil) -> b | _ -> raise X_no_match in
-            if (proper_list args) 
-                    then
-                    (let (args) = simple_lambda_args args in LambdaSimple(args, tag_parse(body))) 
-                    else 
-                    (let (args, last) = lambda_opt_args args in LambdaOpt(args, last, tag_parse(body)))
-      | Pair(Symbol("and"), rest) -> (match rest with (* forum *)
-                |Nil -> Const(Sexpr(Bool(true)))
-                | Pair(exp, Nil)-> tag_parse exp
-                | Pair(exp, rest) -> If(tag_parse exp, tag_parse (Pair(Symbol("and"), rest)), Const(Sexpr(Bool(false))))
-                |_-> raise X_no_match
-                )
+      | Pair(Symbol("if"), body) -> parse_if body                 
+      | Pair(Symbol("lambda"), Pair(args, exps)) -> parse_lambda args exps
+      | Pair(Symbol("and"), rest) -> parse_and rest
       | Pair(Symbol("or"), rest) -> Or(List.map tag_parse (inside_pair rest))
       | Pair(Symbol("set!"), rest) -> let (var, value) = parse_set rest in Set(tag_parse var, tag_parse value) (* macro expand pset!*)
       | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr)) 
-      | Nil -> Const(Void) (* TEMP*)
+      | Nil -> Const(Void) (* TEMP *)
 
-and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps;;
+
+and parse_if body = let (test, dit, dut) = if_body body in
+              (match dut with
+              | Nil -> If(tag_parse(test), tag_parse(dit), Const(Void))
+              | _-> If(tag_parse(test), tag_parse(dit), tag_parse(dut))
+              )
+              
+and parse_lambda args exps = let body = match exps with | Pair(b, q) -> exps | _ -> raise X_no_match in (* body not empty, check -> improper body list *)
+                        let seq = Seq(List.map tag_parse (inside_pair body)) in
+                            if (proper_list args) 
+                                    then (* ask in forum about the body, Seq??? *)
+                                    (let (args) = simple_lambda_args args in LambdaSimple(args, seq)) 
+                                    else 
+                                    (let (args, last) = lambda_opt_args args in LambdaOpt(args, last, seq))
+  
+and parse_and rest = match rest with (* forum *)
+                |Nil -> Const(Sexpr(Bool(true)))
+                | Pair(exp, Nil)-> tag_parse exp
+                | Pair(exp, rest) -> If(tag_parse exp, tag_parse (Pair(Symbol("and"), rest)), Const(Sexpr(Bool(false))))
+                |_-> raise X_no_match 
+                                  
+and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
+;;
 
 (* application chapter 3 slide 32 *)
 
+
+  Pair (Pair (Symbol "x", Pair (Symbol "t", Nil)),
+   Pair (Number (Fraction (1, 1)),
+    Pair (Number (Fraction (2, 1)), Pair (Number (Fraction (3, 1)), Nil)))
+    )
