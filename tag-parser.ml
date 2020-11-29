@@ -507,6 +507,7 @@ exception X_empty_lambda_body;;
 exception X_not_supported_forum;;
 exception X_invalid_let;;
 exception X_invalid_let_star;;
+exception X_invalid_let_rec;;
 exception M_no_match;;
 
 module type TAG_PARSER = sig
@@ -607,6 +608,16 @@ let rec let_exps vexps exps = match vexps with
           | Nil -> exps
           | _ -> raise X_invalid_let;;
 
+let rec whatever_rec exps = match exps with
+          | Pair(Pair(s, exp), rest) -> Pair(Pair(s, Pair(String("whatever"), Nil)), whatever_rec rest)
+          | Nil -> Nil
+          | _ -> raise X_invalid_let_rec;;
+
+let rec whatever_set exps body = match exps with 
+          | Pair(Pair(s, exp), rest) -> Pair(Pair(Symbol("set!"), Pair(s, Pair(exp , Nil))), whatever_set rest body)
+          | Nil -> Pair(Pair(Symbol("let"), Pair(Nil, body)), Nil)
+          | _ -> raise X_invalid_let_rec;;
+
 let rec tag_parse e = match e with
       | Number(num) -> number_to_const e
       | Bool(b) -> Const(Sexpr(e))
@@ -625,6 +636,7 @@ let rec tag_parse e = match e with
        | Pair(Symbol("pset!"), rest) -> expand_pset rest 
       | Pair(Symbol("let"), rest) -> expand_let rest
       | Pair(Symbol("let*"), rest) -> expand_let_star rest
+      | Pair(Symbol("letrec"), rest) -> expand_let_rec rest
       | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr)) 
       | Nil -> Const(Void) (* TEMP *)
 
@@ -682,13 +694,17 @@ and expand_let_star exps_body = match exps_body with
             | Pair(Pair(exp, rest), body) -> expand_let (Pair(Pair(exp, Nil), Pair(Pair(Symbol("let*"), Pair(rest, Pair(body, Nil))), Nil)))
             | _ -> raise X_invalid_let_star
 
-        
-(* and special_parse_qq rest =  *)
+and expand_let_rec exps_body = match exps_body with
+          | Pair(exps, body) -> let whatever = whatever_rec exps in
+                                let whatever_set = whatever_set exps body in
+                                tag_parse (Pair(Symbol("let"), Pair(whatever, Pair(whatever_set, Nil))))
+          | _ -> raise X_invalid_let_rec
+                                        
 and zip paired_lists =
-  match paired_lists with
-  | [], [] -> []
-  | h1::t1, h2::t2 -> (h1, h2)::(zip (t1, t2))
-  | _ -> raise X_not_supported_forum
+        match paired_lists with
+        | [], [] -> []
+        | h1::t1, h2::t2 -> (h1, h2)::(zip (t1, t2))
+        | _ -> raise X_not_supported_forum
 
  and expand_pset lst = 
                       let cdrE =  let_exps lst [] in
@@ -696,8 +712,8 @@ and zip paired_lists =
                       Seq(expand_pset_rec ((zip (carE, cdrE))) [])
 
  and expand_pset_rec lst ret = match lst with 
- | (car, cdr)::rest -> expand_pset_rec rest ret@[Set(Var(car), tag_parse cdr)]
- | [] -> ret
+                  | (car, cdr)::rest -> expand_pset_rec rest ret@[Set(Var(car), tag_parse cdr)]
+                  | [] -> ret
                       
 
 and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
