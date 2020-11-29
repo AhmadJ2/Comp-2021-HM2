@@ -506,6 +506,7 @@ exception X_Reserve_Word;;
 exception X_empty_lambda_body;;
 exception X_not_supported_forum;;
 exception X_invalid_let;;
+exception X_invalid_let_star;;
 exception M_no_match;;
 
 module type TAG_PARSER = sig
@@ -524,7 +525,6 @@ let reserved_word_list =
 (* work on the tag parser starts here *)
 
 let tag_parse_expressions sexpr = raise X_not_yet_implemented;;
-
   
 end;; (* struct Tag_Parser *)
 
@@ -619,10 +619,11 @@ let rec tag_parse e = match e with
       | Pair(Symbol("lambda"), Pair(args, exps)) -> parse_lambda args exps
       | Pair(Symbol("and"), rest) -> parse_and rest
       | Pair(Symbol("or"), rest) -> Or(List.map tag_parse (inside_pair rest))
-      | Pair(Symbol("set!"), rest) -> let (var, value) = parse_set rest in Set(tag_parse var, tag_parse value) (* macro expand pset!*)
+      | Pair(Symbol("set!"), rest) -> let (var, value) = parse_set rest in Set(tag_parse var, tag_parse value)
       | Pair(Symbol("begin"), rest) -> parse_begin_sequence rest
       (* | Pair(Symbol("quasiquote"), rest) -> special_parse_qq rest *)
       | Pair(Symbol("let"), rest) -> expand_let rest
+      | Pair(Symbol("let*"), rest) -> expand_let_star rest
       | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr)) 
       | Nil -> Const(Void) (* TEMP *)
 
@@ -668,23 +669,22 @@ and no_base_begin body seq = match body with
 
 and expand_let exps_body = match exps_body with
           | Pair(exps, body) -> (let body = inside_pair body in
-                                  let vars = let_vars exps [] in
+                                let vars = let_vars exps [] in
                                 let exps = let_exps exps [] in
                                 Applic(LambdaSimple(vars, Seq(List.map tag_parse body)), List.map tag_parse exps)
                                 )
-          |_ -> raise X_invalid_let
+          | _ -> raise X_invalid_let
 
+and expand_let_star exps_body = match exps_body with
+            | Pair(Nil, body) -> expand_let exps_body
+            | Pair(Pair(s, Nil), body) -> expand_let exps_body
+            | Pair(Pair(exp, rest), body) -> expand_let (Pair(Pair(exp, Nil), Pair(Pair(Symbol("let*"), Pair(rest, Pair(body, Nil))), Nil)))
+            | _ -> raise X_invalid_let_star
+
+        
 (* and special_parse_qq rest =  *)
 
 and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
 ;;
 
 (* application chapter 3 slide 32 *)
-
-  Pair
-   (
-     Pair (Pair (Symbol "v1", Pair (Symbol "exp1", Nil)),
-     Pair (Pair (Symbol "v2", Pair (Symbol "exp2", Nil)), Nil)) (* exps *)
-     ,
-   Pair (Symbol "Exp1", Pair (Symbol "Exp2", Nil))
-   )
