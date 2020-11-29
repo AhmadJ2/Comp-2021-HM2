@@ -622,6 +622,7 @@ let rec tag_parse e = match e with
       | Pair(Symbol("set!"), rest) -> let (var, value) = parse_set rest in Set(tag_parse var, tag_parse value)
       | Pair(Symbol("begin"), rest) -> parse_begin_sequence rest
       (* | Pair(Symbol("quasiquote"), rest) -> special_parse_qq rest *)
+       | Pair(Symbol("pset!"), rest) -> expand_pset rest 
       | Pair(Symbol("let"), rest) -> expand_let rest
       | Pair(Symbol("let*"), rest) -> expand_let_star rest
       | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr)) 
@@ -683,6 +684,21 @@ and expand_let_star exps_body = match exps_body with
 
         
 (* and special_parse_qq rest =  *)
+and zip paired_lists =
+  match paired_lists with
+  | [], [] -> []
+  | h1::t1, h2::t2 -> (h1, h2)::(zip (t1, t2))
+  | _ -> raise X_not_supported_forum
+
+ and expand_pset lst = 
+                      let cdrE =  let_exps lst [] in
+                      let carE =  let_vars lst [] in
+                      Seq(expand_pset_rec ((zip (carE, cdrE))) [])
+
+ and expand_pset_rec lst ret = match lst with 
+ | (car, cdr)::rest -> expand_pset_rec rest ret@[Set(Var(car), tag_parse cdr)]
+ | [] -> ret
+                      
 
 and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
 ;;
