@@ -663,7 +663,7 @@ and parse_begin_sequence body = match body with
 
 and no_base_begin body seq = match body with
         | Nil -> seq
-        | Pair(Pair(Symbol("begin") ,rest), rest2) -> no_base_begin rest2 (no_base_begin rest seq) (* faltten it*)
+        | Pair(Pair(Symbol("begin") ,rest), rest2) -> no_base_begin rest2 (no_base_begin rest seq) 
         | Pair(exp ,rest) -> no_base_begin rest (seq@[tag_parse exp])
         | _ -> seq@[tag_parse body]
 
