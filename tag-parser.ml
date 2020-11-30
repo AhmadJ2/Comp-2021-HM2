@@ -507,6 +507,7 @@ exception X_empty_lambda_body;;
 exception X_not_supported_forum;;
 exception X_invalid_let;;
 exception X_invalid_let_star;;
+exception X_invalid_let_rec;;
 exception M_no_match;;
 
 module type TAG_PARSER = sig
@@ -585,9 +586,9 @@ let rec opt_lambda_args_helper args lst = match args with
         |_-> raise X_no_match;;
 
 let rec inside_pair_helper args lst = match args with         
-      | Pair(s, rest) -> inside_pair_helper rest lst@[s]
+      | Pair(s, rest) -> inside_pair_helper rest (lst@[s])
       | Nil -> lst
-      | _ -> lst@[args];;
+      | _ -> (lst@[args]);;
 
 let inside_pair args = inside_pair_helper args [];;
 
@@ -600,16 +601,23 @@ let parse_set body = match body with
 let rec let_vars vexps vars = match vexps with 
           | Pair(Pair(Symbol(s), body), rest) -> let_vars rest (vars@[s])
           | Nil -> vars
-          | _-> raise X_invalid_let;;
+          | _ -> raise X_invalid_let;;
 
 let rec let_exps vexps exps = match vexps with 
           | Pair(Pair(s, Pair(body, Nil)), rest) -> let_exps rest (exps@[body])
           | Nil -> exps
           | _ -> raise X_invalid_let;;
-let rec flip lst = match lst with 
-          | first::rest -> (flip rest)@[first]
-          | [] -> []
-          | _ -> raise X_no_match
+
+let rec whatever_rec exps = match exps with
+          | Pair(Pair(s, exp), rest) -> Pair(Pair(s, Pair(String("whatever"), Nil)), whatever_rec rest)
+          | Nil -> Nil
+          | _ -> raise X_invalid_let_rec;;
+          
+let rec whatever_set exps body = match exps with 
+          | Pair(Pair(s, exp), rest) -> Pair(Pair(Symbol("set!"), Pair(s, exp)), (whatever_set rest body))
+          | Nil -> Pair(Pair(Symbol("let"), Pair(Nil, body)), Nil)
+          | _ -> raise X_invalid_let_rec;;
+
 let rec tag_parse e = match e with
       | Number(num) -> number_to_const e
       | Bool(b) -> Const(Sexpr(e))
@@ -625,9 +633,10 @@ let rec tag_parse e = match e with
       | Pair(Symbol("set!"), rest) -> let (var, value) = parse_set rest in Set(tag_parse var, tag_parse value)
       | Pair(Symbol("begin"), rest) -> parse_begin_sequence rest
       (* | Pair(Symbol("quasiquote"), rest) -> special_parse_qq rest *)
-       | Pair(Symbol("pset!"), rest) -> expand_pset rest 
+      | Pair(Symbol("pset!"), rest) -> expand_pset rest 
       | Pair(Symbol("let"), rest) -> expand_let rest
       | Pair(Symbol("let*"), rest) -> expand_let_star rest
+      | Pair(Symbol("letrec"), rest) -> expand_let_rec rest
       | Pair(Symbol("cond"), rest) -> expand_cond rest 
       | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr))
       | Nil -> Const(Void) (* TEMP *)
@@ -668,7 +677,7 @@ and parse_begin_sequence body = match body with
 
 and no_base_begin body seq = match body with
         | Nil -> seq
-        | Pair(Pair(Symbol("begin") ,rest), rest2) -> no_base_begin rest2 (no_base_begin rest seq) (* faltten it*)
+        | Pair(Pair(Symbol("begin") ,rest), rest2) -> no_base_begin rest2 (no_base_begin rest seq) 
         | Pair(exp ,rest) -> no_base_begin rest (seq@[tag_parse exp])
         | _ -> seq@[tag_parse body]
 
@@ -686,34 +695,36 @@ and expand_let_star exps_body = match exps_body with
             | Pair(Pair(exp, rest), body) -> expand_let (Pair(Pair(exp, Nil), Pair(Pair(Symbol("let*"), Pair(rest, Pair(body, Nil))), Nil)))
             | _ -> raise X_invalid_let_star
 
-        
-(* and special_parse_qq rest =  *)
+and expand_let_rec exps_body = match exps_body with
+          | Pair(exps, body) -> let whatever = whatever_rec exps in
+                                let whatever_set = whatever_set exps body in
+                                tag_parse (Pair(Symbol("let"), Pair(whatever, whatever_set)))
+          | _ -> raise X_invalid_let_rec
+                                        
 and zip paired_lists =
-  match paired_lists with
-  | [], [] -> []
-  | h1::t1, h2::t2 -> (h1, h2)::(zip (t1, t2))
-  | _ -> raise X_not_supported_forum
+      match paired_lists with
+      | [], [] -> []
+      | h1::t1, h2::t2 -> (h1, h2)::(zip (t1, t2))
+      | _ -> raise X_not_supported_forum
 
- and expand_pset lst = 
-                      let cdrE =  let_exps lst [] in
-                      let carE =  let_vars lst [] in
-                      Seq(expand_pset_rec ((zip (carE, cdrE))) [])
+and expand_pset lst = 
+                    let cdrE =  let_exps lst [] in
+                    let carE =  let_vars lst [] in
+                    Seq(expand_pset_rec ((zip (carE, cdrE))) [])
 
- and expand_pset_rec lst ret = match lst with 
- | (car, cdr)::rest -> expand_pset_rec rest ret@[Set(Var(car), tag_parse cdr)]
- | [] -> ret
-
-                      
+and expand_pset_rec lst ret = match lst with 
+                | (car, cdr)::rest -> expand_pset_rec rest ret@[Set(Var(car), tag_parse cdr)]
+                | [] -> ret
+                    
 and expand_cond lst = match lst with 
-| Nil -> Const(Void)
-| Pair(Pair(exp, Pair(Symbol("=>"), Pair(func, Nil))), rest) ->
-(**Pair(Symbol("Lambda"), Pair(Nil, Pair(Body, Nil)))*)
+                | Nil -> Const(Void)
+                | Pair(Pair(exp, Pair(Symbol("=>"), Pair(func, Nil))), rest) ->
                   
-                  let theValue = Pair(Symbol("value"),Pair(exp,Nil)) in 
-                  let func = Pair(Symbol("f"),Pair(Pair(Symbol("lambda"),Pair(Nil, Pair(func,Nil))),Nil)) in
+let theValue = Pair(Symbol("value"),Pair(exp,Nil)) in 
+let func = Pair(Symbol("f"),Pair(Pair(Symbol("lambda"),Pair(Nil, Pair(func,Nil))),Nil)) in
                   
-                  let res =  Pair(Symbol("rest"), Pair(Pair(Symbol("lambda"),Pair(Nil, (Pair(Pair(Symbol("cond"), rest),Nil)))),Nil)) in
-                  let body = (Pair (Symbol "if",
+let res =  Pair(Symbol("rest"), Pair(Pair(Symbol("lambda"),Pair(Nil, (Pair(Pair(Symbol("cond"), rest),Nil)))),Nil)) in
+let body = (Pair (Symbol "if",
                   Pair (Symbol "value",
                    Pair (Pair (Pair (Symbol "f", Nil), Pair (Symbol "value", Nil)),
                     Pair (Pair (Symbol "rest", Nil), Nil))))) in
@@ -732,3 +743,7 @@ and expand_cond lst = match lst with
 
 and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
 ;;
+
+(* application chapter 3 slide 32 *)
+
+  
