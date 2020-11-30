@@ -598,15 +598,18 @@ let parse_set body = match body with
           | _-> raise X_no_match;;
 
 let rec let_vars vexps vars = match vexps with 
-          | Pair(Pair(Symbol(s), body), rest) -> let_vars rest vars@[s]
+          | Pair(Pair(Symbol(s), body), rest) -> let_vars rest (vars@[s])
           | Nil -> vars
           | _-> raise X_invalid_let;;
 
 let rec let_exps vexps exps = match vexps with 
-          | Pair(Pair(s, Pair(body, Nil)), rest) -> let_exps rest exps@[body]
+          | Pair(Pair(s, Pair(body, Nil)), rest) -> let_exps rest (exps@[body])
           | Nil -> exps
           | _ -> raise X_invalid_let;;
-
+let rec flip lst = match lst with 
+          | first::rest -> (flip rest)@[first]
+          | [] -> []
+          | _ -> raise X_no_match
 let rec tag_parse e = match e with
       | Number(num) -> number_to_const e
       | Bool(b) -> Const(Sexpr(e))
@@ -625,7 +628,8 @@ let rec tag_parse e = match e with
        | Pair(Symbol("pset!"), rest) -> expand_pset rest 
       | Pair(Symbol("let"), rest) -> expand_let rest
       | Pair(Symbol("let*"), rest) -> expand_let_star rest
-      | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr)) 
+      | Pair(Symbol("cond"), rest) -> expand_cond rest 
+      | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr))
       | Nil -> Const(Void) (* TEMP *)
 
 
@@ -644,7 +648,7 @@ and parse_lambda args exps = let body = match exps with | Pair(b, q) -> exps | _
                                     (let (args, last) = lambda_opt_args args in LambdaOpt(args, last, seq))
   
 and parse_and rest = match rest with (* forum *)
-                |Nil -> Const(Sexpr(Bool(true)))
+                | Nil -> Const(Sexpr(Bool(true)))
                 | Pair(exp, Nil)-> tag_parse exp
                 | Pair(exp, rest) -> If(tag_parse exp, tag_parse (Pair(Symbol("and"), rest)), Const(Sexpr(Bool(false))))
                 |_-> raise X_no_match 
@@ -670,8 +674,8 @@ and no_base_begin body seq = match body with
 
 and expand_let exps_body = match exps_body with
           | Pair(exps, body) -> (let body = inside_pair body in
-                                let vars = let_vars exps [] in
-                                let exps = let_exps exps [] in
+                                let vars = (let_vars exps []) in
+                                let exps = (let_exps exps []) in
                                 Applic(LambdaSimple(vars, Seq(List.map tag_parse body)), List.map tag_parse exps)
                                 )
           | _ -> raise X_invalid_let
@@ -698,9 +702,33 @@ and zip paired_lists =
  and expand_pset_rec lst ret = match lst with 
  | (car, cdr)::rest -> expand_pset_rec rest ret@[Set(Var(car), tag_parse cdr)]
  | [] -> ret
+
                       
+and expand_cond lst = match lst with 
+| Nil -> Const(Void)
+| Pair(Pair(exp, Pair(Symbol("=>"), Pair(func, Nil))), rest) ->
+(**Pair(Symbol("Lambda"), Pair(Nil, Pair(Body, Nil)))*)
+                  
+                  let theValue = Pair(Symbol("value"),Pair(exp,Nil)) in 
+                  let func = Pair(Symbol("f"),Pair(Pair(Symbol("lambda"),Pair(Nil, Pair(func,Nil))),Nil)) in
+                  
+                  let res =  Pair(Symbol("rest"), Pair(Pair(Symbol("lambda"),Pair(Nil, (Pair(Pair(Symbol("cond"), rest),Nil)))),Nil)) in
+                  let body = (Pair (Symbol "if",
+                  Pair (Symbol "value",
+                   Pair (Pair (Pair (Symbol "f", Nil), Pair (Symbol "value", Nil)),
+                    Pair (Pair (Symbol "rest", Nil), Nil))))) in
+                  let let_args = Pair(theValue,Pair(func, Pair(res, Nil))) in
+                  let let_expr = Pair(Symbol("let"), Pair(let_args, Pair(body,Nil))) in
+                  tag_parse let_expr
+
+| Pair (Pair(Symbol("else"), seq),_ ) -> tag_parse(Pair(Symbol("begin"),seq))
+| Pair(Pair(exp, seq), rest) -> let test = tag_parse(exp) in
+                  let thenn = tag_parse (Pair(Symbol("begin"),seq)) in 
+                  let elsee = tag_parse (Pair(Symbol("cond"), rest))  in 
+                  If(test, thenn, elsee)
+
+                  
+| _ -> raise X_no_match
 
 and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
 ;;
-
-(* application chapter 3 slide 32 *)
