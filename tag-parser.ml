@@ -508,6 +508,7 @@ exception X_not_supported_forum;;
 exception X_invalid_let;;
 exception X_invalid_let_star;;
 exception M_no_match;;
+exception X_invalid_MIT_define;;
 
 module type TAG_PARSER = sig
   val tag_parse_expressions : sexpr list -> expr list
@@ -601,6 +602,11 @@ let rec let_vars vexps vars = match vexps with
           | Pair(Pair(Symbol(s), body), rest) -> let_vars rest (vars@[s])
           | Nil -> vars
           | _-> raise X_invalid_let;;
+let rec mit_vars exp acc= match exp with 
+          | Pair(Symbol(s),rest) -> mit_vars rest (acc@[s])
+          | Nil -> acc
+          | _ -> raise X_invalid_MIT_define
+;;
 
 let rec let_exps vexps exps = match vexps with 
           | Pair(Pair(s, Pair(body, Nil)), rest) -> let_exps rest (exps@[body])
@@ -609,7 +615,6 @@ let rec let_exps vexps exps = match vexps with
 let rec flip lst = match lst with 
           | first::rest -> (flip rest)@[first]
           | [] -> []
-          | _ -> raise X_no_match
 let rec tag_parse e = match e with
       | Number(num) -> number_to_const e
       | Bool(b) -> Const(Sexpr(e))
@@ -617,6 +622,7 @@ let rec tag_parse e = match e with
       | String(s) -> Const(Sexpr(e))
       | Symbol(s) -> check_var s
       | Pair(Symbol("quote"), body) -> quote_body body (* forum *)
+      | Pair(Symbol("define"),Pair(Pair(Symbol(s),lst), rest)) -> expand_define (Pair(Pair(Symbol(s),lst), rest))
       | Pair(Symbol("define"), body) -> parse_define body
       | Pair(Symbol("if"), body) -> parse_if body                 
       | Pair(Symbol("lambda"), Pair(args, exps)) -> parse_lambda args exps
@@ -711,7 +717,6 @@ and expand_cond lst = match lst with
                   
                   let theValue = Pair(Symbol("value"),Pair(exp,Nil)) in 
                   let func = Pair(Symbol("f"),Pair(Pair(Symbol("lambda"),Pair(Nil, Pair(func,Nil))),Nil)) in
-                  
                   let res =  Pair(Symbol("rest"), Pair(Pair(Symbol("lambda"),Pair(Nil, (Pair(Pair(Symbol("cond"), rest),Nil)))),Nil)) in
                   let body = (Pair (Symbol "if",
                   Pair (Symbol "value",
@@ -729,6 +734,13 @@ and expand_cond lst = match lst with
 
                   
 | _ -> raise X_no_match
+
+and expand_define exp = match exp with
+  | Pair(Pair(Symbol(s),lst), rest) ->
+          let body_of_lambda = tag_parse rest in
+          let vars = mit_vars lst [] in
+          Def(tag_parse (Symbol(s)), LambdaSimple(vars, body_of_lambda))
+  | _ -> raise X_invalid_MIT_define
 
 and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
 ;;
