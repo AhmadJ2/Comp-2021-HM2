@@ -743,4 +743,8 @@ and expand_define exp = match exp with
   | _ -> raise X_invalid_MIT_define
 
 and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
-;;
+;;LambdaSimple (["x"], Applic (Applic (Var "*", [Var "x"; Var "x"]), [])))
+;;LambdaOpt ([], "x", Seq [Applic (Var "*", [Var "x"; Var "x"])]))
+
+(define (square x) (mul x x))
+(define square (lambda x (mul x x)))
