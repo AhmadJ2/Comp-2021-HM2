@@ -586,9 +586,9 @@ let rec opt_lambda_args_helper args lst = match args with
         |_-> raise X_no_match;;
 
 let rec inside_pair_helper args lst = match args with         
-      | Pair(s, rest) -> inside_pair_helper rest lst@[s]
+      | Pair(s, rest) -> inside_pair_helper rest (lst@[s])
       | Nil -> lst
-      | _ -> lst@[args];;
+      | _ -> (lst@[args]);;
 
 let inside_pair args = inside_pair_helper args [];;
 
@@ -599,12 +599,12 @@ let parse_set body = match body with
           | _-> raise X_no_match;;
 
 let rec let_vars vexps vars = match vexps with 
-          | Pair(Pair(Symbol(s), body), rest) -> let_vars rest vars@[s]
+          | Pair(Pair(Symbol(s), body), rest) -> let_vars rest (vars@[s])
           | Nil -> vars
-          | _-> raise X_invalid_let;;
+          | _ -> raise X_invalid_let;;
 
 let rec let_exps vexps exps = match vexps with 
-          | Pair(Pair(s, Pair(body, Nil)), rest) -> let_exps rest exps@[body]
+          | Pair(Pair(s, Pair(body, Nil)), rest) -> let_exps rest (exps@[body])
           | Nil -> exps
           | _ -> raise X_invalid_let;;
 
@@ -633,7 +633,7 @@ let rec tag_parse e = match e with
       | Pair(Symbol("set!"), rest) -> let (var, value) = parse_set rest in Set(tag_parse var, tag_parse value)
       | Pair(Symbol("begin"), rest) -> parse_begin_sequence rest
       (* | Pair(Symbol("quasiquote"), rest) -> special_parse_qq rest *)
-       | Pair(Symbol("pset!"), rest) -> expand_pset rest 
+      | Pair(Symbol("pset!"), rest) -> expand_pset rest 
       | Pair(Symbol("let"), rest) -> expand_let rest
       | Pair(Symbol("let*"), rest) -> expand_let_star rest
       | Pair(Symbol("letrec"), rest) -> expand_let_rec rest
@@ -720,3 +720,22 @@ and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps
 ;;
 
 (* application chapter 3 slide 32 *)
+
+
+  Applic
+    (LambdaSimple (["f1"; "f2"],
+      Seq
+      [Applic (Set (Var "f1", Applic (Var "exp1", [])),
+        [Set (Var "f2", Applic (Var "exp2", []));
+          Applic (LambdaSimple ([], Seq [Var "Exp1"; Var "Exp2"]), [])])]),
+    [Const (Sexpr (String "whatever")); Const (Sexpr (String "whatever"))])
+
+  (* 
+  Applic
+  (LambdaSimple (["f1"; "f2"],
+    Seq
+     [Set (Var "f1", Var "exp1"); Set (Var "f2", Var "exp2"); Var "Exp1";
+      Var "Exp2"]),
+  [Const (Sexpr (Symbol "whatever")); Const (Sexpr (Symbol "whatever"))]) 
+  *)
+  
