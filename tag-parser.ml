@@ -510,6 +510,7 @@ exception X_invalid_let_star;;
 exception X_invalid_let_rec;;
 exception M_no_match;;
 exception X_invalid_MIT_define;;
+exception X_invalid_quatisquote;;
 
 module type TAG_PARSER = sig
   val tag_parse_expressions : sexpr list -> expr list
@@ -648,6 +649,7 @@ let rec tag_parse e = match e with
       | Pair(Symbol("let*"), rest) -> expand_let_star rest
       | Pair(Symbol("letrec"), rest) -> expand_let_rec rest
       | Pair(Symbol("cond"), rest) -> expand_cond rest 
+      | Pair(Symbol("quasiquote"),Pair(exp,Nil)) -> expand_quasiquote exp
       | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr))
       | Nil -> Const(Void) (* TEMP *)
 
@@ -747,8 +749,6 @@ let body = (Pair (Symbol "if",
                   let thenn = tag_parse (Pair(Symbol("begin"),seq)) in 
                   let elsee = tag_parse (Pair(Symbol("cond"), rest))  in 
                   If(test, thenn, elsee)
-
-                  
 | _ -> raise X_no_match
 
 and expand_define exp = match exp with
@@ -758,9 +758,17 @@ and expand_define exp = match exp with
           Def(tag_parse (Symbol(s)), LambdaSimple(vars, body_of_lambda))
   | _ -> raise X_invalid_MIT_define
 
+
+and expand_quasiquote exp = match exp with
+  | Pair(Symbol("unquote"), Pair(exp,Nil)) -> tag_parse exp
+  | Pair(Symbol("unquote-splicing"),Pair(exp,Nil)) -> raise X_invalid_quatisquote
+  | Pair(Pair(Symbol("unquote"),Pair(exp,Nil)),rest) -> Applic(Var("cons"), [(tag_parse exp); (expand_quasiquote rest)])
+  | Pair(Pair(Symbol("unquote-splicing"),Pair(exp,Nil)),rest) -> Applic(Var("append"), [(tag_parse exp); (expand_quasiquote rest)])
+  | Nil -> Const(Sexpr(Nil))
+  | Pair(exp,rest) -> Applic(Var("cons"),[Const(Sexpr(exp)); (expand_quasiquote rest)])
+  | _ -> Const(Sexpr(exp))
 and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
 ;;
 
-(* application chapter 3 slide 32 *)
 
-  
+
