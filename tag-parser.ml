@@ -1,11 +1,6 @@
 
-(* ---------------------------------  start here ------------------------ *)
-(* #use "reader.ml";; *)
 #use "reader.ml";;
-#use "pc.ml";;
-open PC;;
 open Reader;;
-
 type constant =
   | Sexpr of sexpr
   | Void
@@ -61,9 +56,8 @@ exception X_invalid_quatisquote;;
 
 module type TAG_PARSER = sig
   val tag_parse_expressions : sexpr list -> expr list
-  (* todo: use expr_eq before starting to parse the input *)
-end;; (* signature TAG_PARSER *)
-
+ (* signature TAG_PARSER *)
+end
 module Tag_Parser : TAG_PARSER = struct
 
 let reserved_word_list =
@@ -74,11 +68,6 @@ let reserved_word_list =
 
 (* work on the tag parser starts here *)
 
-
-  
- (* struct Tag_Parser *)
-
-(* todo: remove after *)
 let reserved_word_list =
   ["and"; "begin"; "cond"; "define"; "else";
    "if"; "lambda"; "let"; "let*"; "letrec"; "or";
@@ -190,7 +179,6 @@ let rec tag_parse e = match e with
       | Pair(Symbol("or"), rest) -> Or(List.map tag_parse (inside_pair rest))
       | Pair(Symbol("set!"), rest) -> let (var, value) = parse_set rest in Set(tag_parse var, tag_parse value)
       | Pair(Symbol("begin"), rest) -> parse_begin_sequence rest
-      (* | Pair(Symbol("quasiquote"), rest) -> special_parse_qq rest *)
       | Pair(Symbol("pset!"), rest) -> expand_pset rest 
       | Pair(Symbol("let"), rest) -> expand_let rest
       | Pair(Symbol("let*"), rest) -> expand_let_star rest
@@ -198,7 +186,7 @@ let rec tag_parse e = match e with
       | Pair(Symbol("cond"), rest) -> expand_cond rest 
       | Pair(Symbol("quasiquote"),Pair(exp,Nil)) -> expand_quasiquote exp
       | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr))
-      | Nil -> Const(Void) (* TEMP *)
+      | Nil -> Const(Void)
 
 
 and parse_if body = let (test, dit, dut) = if_body body in
@@ -279,24 +267,22 @@ and expand_cond lst = match lst with
                 | Nil -> Const(Void)
                 | Pair(Pair(exp, Pair(Symbol("=>"), Pair(func, Nil))), rest) ->
                   
-let theValue = Pair(Symbol("value"),Pair(exp,Nil)) in 
-let func = Pair(Symbol("f"),Pair(Pair(Symbol("lambda"),Pair(Nil, Pair(func,Nil))),Nil)) in
-                  
-let res =  Pair(Symbol("rest"), Pair(Pair(Symbol("lambda"),Pair(Nil, (Pair(Pair(Symbol("cond"), rest),Nil)))),Nil)) in
-let body = (Pair (Symbol "if",
-                  Pair (Symbol "value",
-                   Pair (Pair (Pair (Symbol "f", Nil), Pair (Symbol "value", Nil)),
-                    Pair (Pair (Symbol "rest", Nil), Nil))))) in
-                  let let_args = Pair(theValue,Pair(func, Pair(res, Nil))) in
-                  let let_expr = Pair(Symbol("let"), Pair(let_args, Pair(body,Nil))) in
-                  tag_parse let_expr
-
-| Pair (Pair(Symbol("else"), seq),_ ) -> tag_parse(Pair(Symbol("begin"),seq))
-| Pair(Pair(exp, seq), rest) -> let test = tag_parse(exp) in
-                  let thenn = tag_parse (Pair(Symbol("begin"),seq)) in 
-                  let elsee = tag_parse (Pair(Symbol("cond"), rest))  in 
-                  If(test, thenn, elsee)
-| _ -> raise X_no_match
+                let theValue = Pair(Symbol("value"),Pair(exp,Nil)) in 
+                let func = Pair(Symbol("f"),Pair(Pair(Symbol("lambda"),Pair(Nil, Pair(func,Nil))),Nil)) in             
+                      let res =  Pair(Symbol("rest"), Pair(Pair(Symbol("lambda"),Pair(Nil, (Pair(Pair(Symbol("cond"), rest),Nil)))),Nil)) in
+                      let body = (Pair (Symbol "if",
+                        Pair (Symbol "value",
+                        Pair (Pair (Pair (Symbol "f", Nil), Pair (Symbol "value", Nil)),
+                          Pair (Pair (Symbol "rest", Nil), Nil))))) in
+                        let let_args = Pair(theValue,Pair(func, Pair(res, Nil))) in
+                        let let_expr = Pair(Symbol("let"), Pair(let_args, Pair(body,Nil))) in
+                        tag_parse let_expr
+                | Pair (Pair(Symbol("else"), seq),_ ) -> tag_parse(Pair(Symbol("begin"),seq))
+                | Pair(Pair(exp, seq), rest) -> let test = tag_parse(exp) in
+                                  let thenn = tag_parse (Pair(Symbol("begin"),seq)) in 
+                                  let elsee = tag_parse (Pair(Symbol("cond"), rest))  in 
+                                  If(test, thenn, elsee)
+                | _ -> raise X_no_match
 
 and expand_define exp = match exp with
   | Pair(Pair(Symbol(s),lst), rest) ->
@@ -313,8 +299,11 @@ and expand_quasiquote exp = match exp with
   | Pair(Pair(Symbol("unquote-splicing"),Pair(exp,Nil)),rest) -> Applic(Var("append"), [(tag_parse exp); (expand_quasiquote rest)])
   | Nil -> Const(Sexpr(Nil))
   | Pair(exp,rest) -> Applic(Var("cons"),[Const(Sexpr(exp)); (expand_quasiquote rest)])
-  | _ -> Const(Sexpr(exp))
-and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
-;;
-let tag_parse_expressions sexpr = List.map tag_parse sexpr  ;;
+
+
+  | _ -> Const(Sexpr(exp));;
+
+
+let tag_parse_expressions e = List.map tag_parse e;;             
 end;;
+
