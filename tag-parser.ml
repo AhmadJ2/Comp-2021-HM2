@@ -509,6 +509,8 @@ exception X_invalid_let;;
 exception X_invalid_let_star;;
 exception X_invalid_let_rec;;
 exception M_no_match;;
+exception X_invalid_MIT_define;;
+exception X_invalid_quatisquote;;
 
 module type TAG_PARSER = sig
   val tag_parse_expressions : sexpr list -> expr list
@@ -601,12 +603,20 @@ let parse_set body = match body with
 let rec let_vars vexps vars = match vexps with 
           | Pair(Pair(Symbol(s), body), rest) -> let_vars rest (vars@[s])
           | Nil -> vars
-          | _ -> raise X_invalid_let;;
+          | _-> raise X_invalid_let;;
+let rec mit_vars exp acc= match exp with 
+          | Pair(Symbol(s),rest) -> mit_vars rest (acc@[s])
+          | Nil -> acc
+          | _ -> raise X_invalid_MIT_define
+;;
 
 let rec let_exps vexps exps = match vexps with 
           | Pair(Pair(s, Pair(body, Nil)), rest) -> let_exps rest (exps@[body])
           | Nil -> exps
           | _ -> raise X_invalid_let;;
+let rec flip lst = match lst with 
+          | first::rest -> (flip rest)@[first]
+          | [] -> []
 
 let rec whatever_rec exps = match exps with
           | Pair(Pair(s, exp), rest) -> Pair(Pair(s, Pair(String("whatever"), Nil)), whatever_rec rest)
@@ -625,6 +635,7 @@ let rec tag_parse e = match e with
       | String(s) -> Const(Sexpr(e))
       | Symbol(s) -> check_var s
       | Pair(Symbol("quote"), body) -> quote_body body (* forum *)
+      | Pair(Symbol("define"),Pair(Pair(Symbol(s),lst), rest)) -> expand_define (Pair(Pair(Symbol(s),lst), rest))
       | Pair(Symbol("define"), body) -> parse_define body
       | Pair(Symbol("if"), body) -> parse_if body                 
       | Pair(Symbol("lambda"), Pair(args, exps)) -> parse_lambda args exps
@@ -638,6 +649,7 @@ let rec tag_parse e = match e with
       | Pair(Symbol("let*"), rest) -> expand_let_star rest
       | Pair(Symbol("letrec"), rest) -> expand_let_rec rest
       | Pair(Symbol("cond"), rest) -> expand_cond rest 
+      | Pair(Symbol("quasiquote"),Pair(exp,Nil)) -> expand_quasiquote exp
       | Pair(car, cdr) -> Applic(tag_parse(car), List.map tag_parse (inside_pair cdr))
       | Nil -> Const(Void) (* TEMP *)
 
@@ -737,13 +749,26 @@ let body = (Pair (Symbol "if",
                   let thenn = tag_parse (Pair(Symbol("begin"),seq)) in 
                   let elsee = tag_parse (Pair(Symbol("cond"), rest))  in 
                   If(test, thenn, elsee)
-
-                  
 | _ -> raise X_no_match
 
+and expand_define exp = match exp with
+  | Pair(Pair(Symbol(s),lst), rest) ->
+          let body_of_lambda = tag_parse rest in
+          let vars = mit_vars lst [] in
+          Def(tag_parse (Symbol(s)), LambdaSimple(vars, body_of_lambda))
+  | _ -> raise X_invalid_MIT_define
+
+
+and expand_quasiquote exp = match exp with
+  | Pair(Symbol("unquote"), Pair(exp,Nil)) -> tag_parse exp
+  | Pair(Symbol("unquote-splicing"),Pair(exp,Nil)) -> raise X_invalid_quatisquote
+  | Pair(Pair(Symbol("unquote"),Pair(exp,Nil)),rest) -> Applic(Var("cons"), [(tag_parse exp); (expand_quasiquote rest)])
+  | Pair(Pair(Symbol("unquote-splicing"),Pair(exp,Nil)),rest) -> Applic(Var("append"), [(tag_parse exp); (expand_quasiquote rest)])
+  | Nil -> Const(Sexpr(Nil))
+  | Pair(exp,rest) -> Applic(Var("cons"),[Const(Sexpr(exp)); (expand_quasiquote rest)])
+  | _ -> Const(Sexpr(exp))
 and tags e = let exps = Reader.read_sexprs e in List.map tag_parse exps             
 ;;
 
-(* application chapter 3 slide 32 *)
 
-  
+
