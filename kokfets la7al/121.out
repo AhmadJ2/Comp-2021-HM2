@@ -1,0 +1,1 @@
+[Pair (Char '\n', Pair (Char '\012', Pair (Char '\r', Pair (Char ' ', Pair (Char '\t', Pair (Char '\n', Pair (Char '\012', Pair (Char '\r', Pair (Char ' ', Pair (Char '\t', Nil))))))))))]
