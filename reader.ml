@@ -70,6 +70,9 @@ let get_option some_val =
 let string_metachar
   = caten (char ('\\')) (const (fun ch -> ch='f'||ch='n'||ch='\\'||ch='t'||ch='r'||ch='"'));;
 
+let list_to_string_ci s =
+    String.concat "" (List.map (fun ch -> String.make 1 (lowercase_ascii ch)) s);;
+
 let replace_metachar s = 
   match s with
     | ('\\','f') -> '\012'
@@ -196,8 +199,8 @@ let charPrefix s = word "#\\" s;;
 let visiblesimplechar s = const (fun ch -> ch >' ') s;;
 
 let nt_namedChar s = 
-  let (e,s) = disj_l ["newline"; "nul"; "page"; "return"; "space"; "tab"] word s in
-  let e = (list_to_string e) in
+  let (e,s) = disj_l ["newline"; "nul"; "page"; "return"; "space"; "tab"] word_ci s in
+  let e = (list_to_string_ci e) in
   match e with
     |"newline" -> ('\n', s)
     |"nul" -> ('\000', s)
@@ -218,7 +221,7 @@ and nt_string s =
                 (fun ((l, e), r) -> String(list_to_string e))) in st s
 and nt_bool = disj (pack nt_boolt (fun _-> Bool(true))) 
   (pack nt_boolf (fun _-> Bool(false)))
-and nt_char = pack (caten (caten charPrefix (disj visiblesimplechar nt_namedChar)) nt_whitespaces) 
+and nt_char = pack (caten (caten charPrefix nt_namedChar) nt_whitespaces) 
       (fun ((pre, vis), spaces) -> Char(vis))
 and nt_number =  not_followed_by number (disj symLetters nt_specialchar)
 and nt_symbol =  disj (fun x ->

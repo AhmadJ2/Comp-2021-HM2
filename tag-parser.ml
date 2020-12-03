@@ -1,5 +1,4 @@
 
-(* ---------------------------------  start here ------------------------ *)
 #use "reader.ml";;
 open Reader;;
 type constant =
@@ -68,6 +67,7 @@ let reserved_word_list =
    "unquote-splicing"];;  
 
 (* work on the tag parser starts here *)
+
 let reserved_word_list =
   ["and"; "begin"; "cond"; "define"; "else";
    "if"; "lambda"; "let"; "let*"; "letrec"; "or";
@@ -299,8 +299,11 @@ and expand_quasiquote exp = match exp with
   | Pair(Pair(Symbol("unquote-splicing"),Pair(exp,Nil)),rest) -> Applic(Var("append"), [(tag_parse exp); (expand_quasiquote rest)])
   | Nil -> Const(Sexpr(Nil))
   | Pair(exp,rest) -> Applic(Var("cons"),[Const(Sexpr(exp)); (expand_quasiquote rest)])
+
+
   | _ -> Const(Sexpr(exp));;
 
 
 let tag_parse_expressions e = List.map tag_parse e;;             
 end;;
+
