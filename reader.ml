@@ -3,6 +3,7 @@ open PC;;
 exception X_not_yet_implemented;;
 exception X_this_should_not_happen;;
 exception X_comment;;  
+exception M_no_match;;  
 
 
 type number =
@@ -41,8 +42,8 @@ let normalize_scheme_symbol str =
 	s) then str
   else Printf.sprintf "|%s|" str;;
   
-  
-  (* let read_sexprs string = raise X_comment;;
+(*   
+  let read_sexprs string = raise X_comment;;
   end;; *)
 let make_paired nt_left nt_right nt =
   let nt = caten nt_left nt in
@@ -239,13 +240,15 @@ and nt_char = pack (caten (caten charPrefix (disj nt_namedChar nt_regular_char))
 and nt_number =  not_followed_by number (disj symLetters nt_specialchar)
 and nt_symbol =  disj (fun x ->
   let ((sym,slst), rest) = caten symChar (plus symChar) x in
-  (Symbol(list_to_string (sym::slst)), rest)) 
-  (fun s -> let (sym,rest) = symbolCharNoDot s in (Symbol(list_to_string [sym]), rest))
+  (Symbol(list_to_string_ci (sym::slst)), rest)) 
+  (fun s -> let (sym,rest) = symbolCharNoDot s in (Symbol(list_to_string_ci [sym]), rest))
+
 and nt_list s = let p = pack 
     (caten (caten tok_lparen (star (nt_sexpr))) tok_rparen) 
       (fun ((l,exps), r) -> (List.fold_right(
                 (fun x acc  -> Pair(x ,acc)))) exps Nil)
                  in p s
+
 and nt_dotted_list s = let dotted = pack 
       (
         caten (caten tok_lparen (plus nt_sexpr)) (caten (caten (make_spaced dot) nt_sexpr) tok_rparen)
@@ -272,7 +275,7 @@ and nt_comment s = let (_ ,s) = caten (char ';') (star (const (fun ch -> ch!='\n
                       | None -> (Nil, []))
         | _ -> (Nil, [])
 and nt_sexpr s =  let nt_l = [
-  nt_number; nt_char;nt_string; nt_bool;nt_symbol;nt_list;nt_dotted_list;nt_all_quotes;nt_comment;nt_sexprcomment] in
+  nt_number; nt_char;nt_string; nt_bool;nt_symbol;nt_list;nt_dotted_list;nt_all_quotes] in
   (make_spaced(nt_disj_nt_list nt_l)) s;;
 
 let rec remove_last_nil s lst = match s with 
@@ -280,9 +283,25 @@ let rec remove_last_nil s lst = match s with
   | car::[] -> (lst@[car])
   | car::rest -> remove_last_nil rest (lst@[car])
   | _ -> raise X_no_match;;
+ 
 
-let read_sexprs string = let (sexp, lst) = star nt_sexpr (string_to_list string) in        
+let rec remove_all_comments s new_s = match s with
+        | '#'::';'::rest -> remove_sexprcomment rest new_s 
+        | ';'::rest -> remove_all_comments (remove_comment s) new_s
+        | chr::[] -> new_s@[chr]
+        | chr::rest -> remove_all_comments rest (new_s@[chr])
+        | _ -> new_s
+  
+and remove_comment cmnt = let(_, s) = (star (const (fun ch -> ch!='\n'))) cmnt in 
+    match s with 
+    | '\n'::rest -> rest
+    | _ -> []
 
-match lst with | [] -> if List.length sexp > 1 then (remove_last_nil sexp []) else sexp | _ -> raise X_no_match ;;
+and remove_sexprcomment cmnt new_s = let to_remove = remove_all_comments cmnt [] in 
+      let (_, rest) =  nt_sexpr to_remove in new_s@rest;;
+
+let read_sexprs string = let chars = remove_all_comments (string_to_list string) [] in
+  let (sexp, lst) = star nt_sexpr chars in        
+        match lst with | [] -> if List.length sexp > 1 then (remove_last_nil sexp []) else sexp | _ -> raise X_no_match ;;
  (* struct Reader *)
- end;;
+end;;
