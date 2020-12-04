@@ -2,7 +2,9 @@
 open PC;;
 exception X_not_yet_implemented;;
 exception X_this_should_not_happen;;
-  
+exception X_comment;;  
+
+
 type number =
   | Fraction of int * int
   | Float of float;;
@@ -38,7 +40,10 @@ let normalize_scheme_symbol str =
 	(fun ch -> (ch = (lowercase_ascii ch)))
 	s) then str
   else Printf.sprintf "|%s|" str;;
-
+  
+  
+  (* let read_sexprs string = raise X_comment;;
+  end;; *)
 let make_paired nt_left nt_right nt =
   let nt = caten nt_left nt in
   let nt = pack nt (function (_, e) -> e) in
@@ -209,6 +214,12 @@ let nt_namedChar s =
     |"space" -> (' ',s)
     |"tab" ->('\t', s)
     |e -> raise X_no_match;;
+
+let nt_regular_char s = match s with  
+          | car::cdr -> (car, cdr)
+          | _ -> raise X_no_match;;
+
+
 let rec pairs lst = match lst with
     | [] -> Nil
     |first:: rst -> Pair(first, pairs rst);;
@@ -221,8 +232,10 @@ and nt_string s =
                 (fun ((l, e), r) -> String(list_to_string e))) in st s
 and nt_bool = disj (pack nt_boolt (fun _-> Bool(true))) 
   (pack nt_boolf (fun _-> Bool(false)))
-and nt_char = pack (caten (caten charPrefix nt_namedChar) nt_whitespaces) 
-      (fun ((pre, vis), spaces) -> Char(vis))
+and nt_char = pack (caten (caten charPrefix (disj nt_namedChar nt_regular_char)) nt_whitespaces) 
+    (fun ((pre, vis), spaces) -> Char(vis))
+
+
 and nt_number =  not_followed_by number (disj symLetters nt_specialchar)
 and nt_symbol =  disj (fun x ->
   let ((sym,slst), rest) = caten symChar (plus symChar) x in
@@ -254,12 +267,22 @@ and nt_sexprcomment s = pack (caten (caten (word "#;") (nt_sexpr)) (maybe (nt_se
       (fun ((s,e),r)-> match r with | None -> Nil | Some r -> r ) s
 and nt_comment s = let (_ ,s) = caten (char ';') (star (const (fun ch -> ch!='\n'))) s in
       match s with 
-        |'\n'::rest -> nt_sexpr rest
+        |'\n'::rest -> (let (e, s) = maybe nt_sexpr rest in match e with
+                      | Some(e) -> (e, s)
+                      | None -> (Nil, []))
         | _ -> (Nil, [])
 and nt_sexpr s =  let nt_l = [
   nt_number; nt_char;nt_string; nt_bool;nt_symbol;nt_list;nt_dotted_list;nt_all_quotes;nt_comment;nt_sexprcomment] in
   (make_spaced(nt_disj_nt_list nt_l)) s;;
 
-let read_sexprs string = let (sexp, lst) = star nt_sexpr (string_to_list string) in 
-          match lst with | [] -> sexp | _ -> raise X_no_match ;;
-end;; (* struct Reader *)
+let rec remove_last_nil s lst = match s with 
+  | Nil::[] -> lst
+  | car::[] -> (lst@[car])
+  | car::rest -> remove_last_nil rest (lst@[car])
+  | _ -> raise X_no_match;;
+
+let read_sexprs string = let (sexp, lst) = star nt_sexpr (string_to_list string) in        
+
+match lst with | [] -> if List.length sexp > 1 then (remove_last_nil sexp []) else sexp | _ -> raise X_no_match ;;
+ (* struct Reader *)
+ end;;
