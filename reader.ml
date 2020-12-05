@@ -266,14 +266,7 @@ and nt_all_quotes s = let (quete,sexp) = match s with
       |_ -> raise X_no_match 
       in let (s,r) = nt_sexpr sexp in 
       (Pair(Symbol(quete), Pair(s, Nil)), r)
-and nt_sexprcomment s = pack (caten (caten (word "#;") (nt_sexpr)) (maybe (nt_sexpr)))
-      (fun ((s,e),r)-> match r with | None -> Nil | Some r -> r ) s
-and nt_comment s = let (_ ,s) = caten (char ';') (star (const (fun ch -> ch!='\n'))) s in
-      match s with 
-        |'\n'::rest -> (let (e, s) = maybe nt_sexpr rest in match e with
-                      | Some(e) -> (e, s)
-                      | None -> (Nil, []))
-        | _ -> (Nil, [])
+
 and nt_sexpr s =  let nt_l = [
   nt_number; nt_char;nt_string; nt_bool;nt_symbol;nt_list;nt_dotted_list;nt_all_quotes] in
   (make_spaced(nt_disj_nt_list nt_l)) s;;
@@ -302,6 +295,6 @@ and remove_sexprcomment cmnt new_s = let to_remove = remove_all_comments cmnt []
 
 let read_sexprs string = let chars = remove_all_comments (string_to_list string) [] in
   let (sexp, lst) = star nt_sexpr chars in        
-        match lst with | [] -> if List.length sexp > 1 then (remove_last_nil sexp []) else sexp | _ -> raise X_no_match ;;
+        match lst with | [] -> sexp | _ -> raise X_no_match ;;
  (* struct Reader *)
 end;;
